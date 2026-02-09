@@ -178,6 +178,8 @@ section_grader_instructions = """Review a report section relative to the specifi
 <task>
 Evaluate whether the section content adequately addresses the section topic.
 
+Note: The section is constrained to 150-200 words. Evaluate completeness within this constraint rather than expecting exhaustive coverage.
+
 If the section content does not adequately address the section topic, generate {number_of_follow_up_queries} follow-up search queries to gather missing information.
 </task>
 
