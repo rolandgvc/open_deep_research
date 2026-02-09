@@ -1,11 +1,14 @@
 import os
 import asyncio
+import logging
 import requests
 import random 
 import concurrent
 import aiohttp
 import httpx
 import time
+
+logger = logging.getLogger(__name__)
 from typing import List, Optional, Dict, Any, Union
 from urllib.parse import unquote
 
@@ -175,9 +178,17 @@ async def tavily_search_async(search_queries, max_results: int = 5, topic: str =
                 )
             )
 
-    # Execute all searches concurrently
-    search_docs = await asyncio.gather(*search_tasks)
-    return search_docs
+    # Execute all searches concurrently, capturing exceptions instead of propagating
+    search_docs = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+    # Filter out failed searches, logging errors for debugging
+    successful_docs = []
+    for i, result in enumerate(search_docs):
+        if isinstance(result, Exception):
+            logger.error(f"Tavily search failed for query '{search_queries[i]}': {result}")
+        else:
+            successful_docs.append(result)
+    return successful_docs
 
 @traceable
 def perplexity_search(search_queries):
