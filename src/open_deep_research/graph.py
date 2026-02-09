@@ -7,6 +7,10 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
+from introspection_sdk import IntrospectionSpanProcessor
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
 
 from open_deep_research.state import (
     ReportStateInput,
@@ -36,6 +40,26 @@ from open_deep_research.utils import (
     get_search_params, 
     select_and_execute_search
 )
+
+# Introspection SDK + OpenTelemetry instrumentation for LangGraph workflows.
+_tracing_configured = False
+
+
+def _configure_tracing() -> None:
+    global _tracing_configured
+    if _tracing_configured:
+        return
+
+    tracer_provider = TracerProvider()
+    processor = IntrospectionSpanProcessor(service_name="open_deep_research")
+    tracer_provider.add_span_processor(processor)
+    trace.set_tracer_provider(tracer_provider)
+    LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+
+    _tracing_configured = True
+
+
+_configure_tracing()
 
 ## Nodes -- 
 
