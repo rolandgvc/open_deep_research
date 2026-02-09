@@ -10,8 +10,11 @@ from langgraph.types import Command, Send
 from langgraph.graph import START, END, StateGraph
 
 from open_deep_research.configuration import Configuration
+from open_deep_research.instrumentation import configure_tracing
 from open_deep_research.utils import get_config_value, tavily_search, duckduckgo_search
 from open_deep_research.prompts import SUPERVISOR_INSTRUCTIONS, RESEARCH_INSTRUCTIONS
+
+configure_tracing()
 
 ## Tools factory - will be initialized based on configuration
 def get_search_tool(config: RunnableConfig):
