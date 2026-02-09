@@ -1,6 +1,9 @@
+import logging
 from typing import Literal
 
 from langchain.chat_models import init_chat_model
+
+logger = logging.getLogger(__name__)
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
@@ -423,7 +426,12 @@ def compile_final_report(state: ReportState):
 
     # Update sections with completed content while maintaining original order
     for section in sections:
-        section.content = completed_sections[section.name]
+        content = completed_sections.get(section.name)
+        if content is None:
+            logger.warning(f"Section '{section.name}' not found in completed sections")
+            section.content = f"[Section '{section.name}' could not be completed]"
+        else:
+            section.content = content
 
     # Compile final report
     all_sections = "\n\n".join([s.content for s in sections])
