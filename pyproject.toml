@@ -34,9 +34,6 @@ dependencies = [
     "pytest",
     "httpx>=0.24.0",
     "markdownify>=0.11.6",
-    "introspection-sdk",
-    "openinference-instrumentation-langchain",
-    "opentelemetry-sdk"
 ]
 
 [project.optional-dependencies]
