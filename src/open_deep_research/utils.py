@@ -232,7 +232,8 @@ def perplexity_search(search_queries):
         response = requests.post(
             "https://api.perplexity.ai/chat/completions",
             headers=headers,
-            json=payload
+            json=payload,
+            timeout=30
         )
         response.raise_for_status()  # Raise exception for bad status codes
         
@@ -951,7 +952,8 @@ async def google_search_async(search_queries: Union[str, List[str]], max_results
                                     cookies = {
                                         'CONSENT': 'PENDING+987',  # Bypasses the consent page
                                         'SOCS': 'CAESHAgBEhIaAB',
-                                    }
+                                    },
+                                    timeout=30
                                 )
                                 resp.raise_for_status()
                                 
