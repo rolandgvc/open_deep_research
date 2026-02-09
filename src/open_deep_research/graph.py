@@ -1,9 +1,14 @@
+import asyncio
+from functools import wraps
 from typing import Literal
 
+from introspection_sdk import IntrospectionSpanProcessor
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
 from langgraph.constants import Send
 from langgraph.graph import START, END, StateGraph
 from langgraph.types import interrupt, Command
@@ -37,8 +42,54 @@ from open_deep_research.utils import (
     select_and_execute_search
 )
 
+
+_TRACING_INITIALIZED = False
+
+
+def configure_tracing() -> None:
+    """Configure OpenTelemetry tracing for LangChain + Introspection."""
+    global _TRACING_INITIALIZED
+    if _TRACING_INITIALIZED:
+        return
+
+    provider = TracerProvider()
+    processor = IntrospectionSpanProcessor(service_name="open_deep_research")
+    provider.add_span_processor(processor)
+    trace.set_tracer_provider(provider)
+
+    LangChainInstrumentor().instrument(tracer_provider=provider)
+    _TRACING_INITIALIZED = True
+
+
+configure_tracing()
+tracer = trace.get_tracer(__name__)
+
+
+def traced_step(name: str):
+    """Add a tracing span around a workflow step."""
+    def decorator(func):
+        if asyncio.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                with tracer.start_as_current_span(name):
+                    return await func(*args, **kwargs)
+
+            return async_wrapper
+
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            with tracer.start_as_current_span(name):
+                return func(*args, **kwargs)
+
+        return sync_wrapper
+
+    return decorator
+
+
+
 ## Nodes -- 
 
+@traced_step("node.generate_report_plan")
 async def generate_report_plan(state: ReportState, config: RunnableConfig):
     """Generate the initial report plan with sections.
     
@@ -128,6 +179,7 @@ async def generate_report_plan(state: ReportState, config: RunnableConfig):
 
     return {"sections": sections}
 
+@traced_step("node.human_feedback")
 def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Literal["generate_report_plan","build_section_with_web_research"]]:
     """Get human feedback on the report plan and route to next steps.
     
@@ -180,6 +232,7 @@ def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Litera
     else:
         raise TypeError(f"Interrupt value of type {type(feedback)} is not supported.")
     
+@traced_step("node.generate_queries")
 async def generate_queries(state: SectionState, config: RunnableConfig):
     """Generate search queries for researching a specific section.
     
@@ -220,6 +273,7 @@ async def generate_queries(state: SectionState, config: RunnableConfig):
 
     return {"search_queries": queries.queries}
 
+@traced_step("node.search_web")
 async def search_web(state: SectionState, config: RunnableConfig):
     """Execute web searches for the section queries.
     
@@ -253,6 +307,7 @@ async def search_web(state: SectionState, config: RunnableConfig):
 
     return {"source_str": source_str, "search_iterations": state["search_iterations"] + 1}
 
+@traced_step("node.write_section")
 async def write_section(state: SectionState, config: RunnableConfig) -> Command[Literal[END, "search_web"]]:
     """Write a section of the report and evaluate if more research is needed.
     
@@ -341,6 +396,7 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
         goto="search_web"
         )
     
+@traced_step("node.write_final_sections")
 async def write_final_sections(state: SectionState, config: RunnableConfig):
     """Write sections that don't require research using completed sections as context.
     
@@ -381,6 +437,7 @@ async def write_final_sections(state: SectionState, config: RunnableConfig):
     # Write the updated section to completed sections
     return {"completed_sections": [section]}
 
+@traced_step("node.gather_completed_sections")
 def gather_completed_sections(state: ReportState):
     """Format completed sections as context for writing final sections.
     
@@ -402,6 +459,7 @@ def gather_completed_sections(state: ReportState):
 
     return {"report_sections_from_research": completed_report_sections}
 
+@traced_step("node.compile_final_report")
 def compile_final_report(state: ReportState):
     """Compile all sections into the final report.
     
@@ -483,3 +541,7 @@ builder.add_edge("write_final_sections", "compile_final_report")
 builder.add_edge("compile_final_report", END)
 
 graph = builder.compile()
+le()
+()
+)
+()
