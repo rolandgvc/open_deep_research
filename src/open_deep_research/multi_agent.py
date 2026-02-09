@@ -147,8 +147,14 @@ async def supervisor_tools(state: ReportState, config: RunnableConfig)  -> Comma
     
     # First process all tool calls to ensure we respond to each one (required for OpenAI)
     for tool_call in state["messages"][-1].tool_calls:
-        # Get the tool
-        tool = supervisor_tools_by_name[tool_call["name"]]
+        # Get the tool (with defensive handling for unknown tool names)
+        tool = supervisor_tools_by_name.get(tool_call["name"])
+        if tool is None:
+            result.append({"role": "tool",
+                           "content": f"Error: Unknown tool '{tool_call['name']}'. Available tools: {list(supervisor_tools_by_name.keys())}",
+                           "name": tool_call["name"],
+                           "tool_call_id": tool_call["id"]})
+            continue
         # Perform the tool call - use ainvoke for async tools
         if hasattr(tool, 'ainvoke'):
             observation = await tool.ainvoke(tool_call["args"])
