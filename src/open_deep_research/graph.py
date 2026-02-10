@@ -1,12 +1,18 @@
+import inspect
+import os
+from functools import wraps
 from typing import Literal
 
+from introspection_sdk import IntrospectionSpanProcessor
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
-
 from langgraph.constants import Send
-from langgraph.graph import START, END, StateGraph
-from langgraph.types import interrupt, Command
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
 
 from open_deep_research.state import (
     ReportStateInput,
@@ -37,8 +43,54 @@ from open_deep_research.utils import (
     select_and_execute_search
 )
 
+SERVICE_NAME = os.getenv("INTROSPECTION_SERVICE_NAME", "open_deep_research")
+_TRACING_CONFIGURED = False
+
+
+def _configure_tracing() -> trace.Tracer:
+    global _TRACING_CONFIGURED
+    if _TRACING_CONFIGURED:
+        return trace.get_tracer(__name__)
+
+    provider = trace.get_tracer_provider()
+    if not isinstance(provider, TracerProvider):
+        provider = TracerProvider()
+        trace.set_tracer_provider(provider)
+
+    provider.add_span_processor(
+        IntrospectionSpanProcessor(service_name=SERVICE_NAME)
+    )
+    LangChainInstrumentor().instrument(tracer_provider=provider)
+    _TRACING_CONFIGURED = True
+    return trace.get_tracer(__name__)
+
+
+tracer = _configure_tracing()
+
+
+def workflow_step(name: str):
+    def decorator(func):
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                with tracer.start_as_current_span(name):
+                    return await func(*args, **kwargs)
+
+            return async_wrapper
+
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            with tracer.start_as_current_span(name):
+                return func(*args, **kwargs)
+
+        return sync_wrapper
+
+    return decorator
+
+
 ## Nodes -- 
 
+@workflow_step("step.generate_report_plan")
 async def generate_report_plan(state: ReportState, config: RunnableConfig):
     """Generate the initial report plan with sections.
     
@@ -128,6 +180,7 @@ async def generate_report_plan(state: ReportState, config: RunnableConfig):
 
     return {"sections": sections}
 
+@workflow_step("step.human_feedback")
 def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Literal["generate_report_plan","build_section_with_web_research"]]:
     """Get human feedback on the report plan and route to next steps.
     
@@ -180,6 +233,7 @@ def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Litera
     else:
         raise TypeError(f"Interrupt value of type {type(feedback)} is not supported.")
     
+@workflow_step("step.generate_queries")
 async def generate_queries(state: SectionState, config: RunnableConfig):
     """Generate search queries for researching a specific section.
     
@@ -220,6 +274,7 @@ async def generate_queries(state: SectionState, config: RunnableConfig):
 
     return {"search_queries": queries.queries}
 
+@workflow_step("step.search_web")
 async def search_web(state: SectionState, config: RunnableConfig):
     """Execute web searches for the section queries.
     
@@ -253,6 +308,7 @@ async def search_web(state: SectionState, config: RunnableConfig):
 
     return {"source_str": source_str, "search_iterations": state["search_iterations"] + 1}
 
+@workflow_step("step.write_section")
 async def write_section(state: SectionState, config: RunnableConfig) -> Command[Literal[END, "search_web"]]:
     """Write a section of the report and evaluate if more research is needed.
     
@@ -341,6 +397,7 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
         goto="search_web"
         )
     
+@workflow_step("step.write_final_sections")
 async def write_final_sections(state: SectionState, config: RunnableConfig):
     """Write sections that don't require research using completed sections as context.
     
@@ -381,6 +438,7 @@ async def write_final_sections(state: SectionState, config: RunnableConfig):
     # Write the updated section to completed sections
     return {"completed_sections": [section]}
 
+@workflow_step("step.gather_completed_sections")
 def gather_completed_sections(state: ReportState):
     """Format completed sections as context for writing final sections.
     
@@ -402,6 +460,7 @@ def gather_completed_sections(state: ReportState):
 
     return {"report_sections_from_research": completed_report_sections}
 
+@workflow_step("step.compile_final_report")
 def compile_final_report(state: ReportState):
     """Compile all sections into the final report.
     
@@ -430,6 +489,7 @@ def compile_final_report(state: ReportState):
 
     return {"final_report": all_sections}
 
+@workflow_step("step.initiate_final_section_writing")
 def initiate_final_section_writing(state: ReportState):
     """Create parallel tasks for writing non-research sections.
     
