@@ -35,7 +35,7 @@ from open_deep_research.utils import (
     format_sections, 
     get_config_value, 
     get_search_params, 
-    select_and_execute_search
+    select_and_execute_search,
 )
 
 configure_tracing()

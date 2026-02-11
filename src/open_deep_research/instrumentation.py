@@ -10,7 +10,7 @@ from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 
-_SERVICE_NAME = os.getenv("INTROSPECTION_SERVICE_NAME", "open-deep-research")
+_SERVICE_NAME = os.getenv("INTROSPECTION_SERVICE_NAME", "open_deep_research")
 _configured = False
 _processor: IntrospectionSpanProcessor | None = None
 
