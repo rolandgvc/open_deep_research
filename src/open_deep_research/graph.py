@@ -1,5 +1,7 @@
 from typing import Literal
 
+import logfire
+from introspection_sdk import IntrospectionSpanProcessor
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -36,6 +38,17 @@ from open_deep_research.utils import (
     get_search_params, 
     select_and_execute_search
 )
+
+SERVICE_NAME = "open_deep_research"
+introspection_processor = IntrospectionSpanProcessor(service_name=SERVICE_NAME)
+
+logfire.configure(
+    service_name=SERVICE_NAME,
+    additional_span_processors=[introspection_processor],
+)
+logfire.instrument_openai()
+logfire.instrument_anthropic()
+
 
 ## Nodes -- 
 
