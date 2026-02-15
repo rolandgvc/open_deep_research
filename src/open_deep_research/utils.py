@@ -1319,8 +1319,10 @@ async def select_and_execute_search(search_api: str, query_list: list[str], para
         ValueError: If an unsupported search API is specified
     """
     if search_api == "tavily":
-        # Tavily search tool used with both workflow and agent 
-        return await tavily_search.ainvoke({'queries': query_list}, **params_to_pass)
+        # Call tavily_search_async directly so params_to_pass (max_results, topic) are forwarded correctly.
+        # Using tavily_search.ainvoke() would absorb params_to_pass into BaseTool.ainvoke kwargs.
+        search_results = await tavily_search_async(query_list, **params_to_pass)
+        return deduplicate_and_format_sources(search_results, max_tokens_per_source=4000)
     elif search_api == "duckduckgo":
         # DuckDuckGo search tool used with both workflow and agent 
         return await duckduckgo_search.ainvoke({'search_queries': query_list})
