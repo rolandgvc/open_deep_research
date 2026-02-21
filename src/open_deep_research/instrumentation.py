@@ -5,7 +5,7 @@ from __future__ import annotations
 import atexit
 import os
 
-from introspection_sdk import IntrospectionSpanProcessor
+from introspection_sdk import IntrospectionClient, IntrospectionSpanProcessor
 from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -13,14 +13,15 @@ from opentelemetry.sdk.trace import TracerProvider
 _SERVICE_NAME = os.getenv("INTROSPECTION_SERVICE_NAME", "open_deep_research")
 _configured = False
 _processor: IntrospectionSpanProcessor | None = None
+_client = IntrospectionClient(service_name=_SERVICE_NAME)
 
 
-def configure_tracing() -> None:
+def configure_tracing() -> IntrospectionClient:
     """Configure OpenTelemetry + Introspection tracing once per process."""
     global _configured, _processor
 
     if _configured:
-        return
+        return _client
 
     provider = TracerProvider()
     _processor = IntrospectionSpanProcessor(service_name=_SERVICE_NAME)
@@ -37,6 +38,7 @@ def configure_tracing() -> None:
 
     atexit.register(_shutdown)
     _configured = True
+    return _client
 
 
 __all__ = ["configure_tracing"]

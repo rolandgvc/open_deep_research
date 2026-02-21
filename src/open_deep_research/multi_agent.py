@@ -14,7 +14,7 @@ from open_deep_research.instrumentation import configure_tracing
 from open_deep_research.utils import get_config_value, tavily_search, duckduckgo_search
 from open_deep_research.prompts import SUPERVISOR_INSTRUCTIONS, RESEARCH_INSTRUCTIONS
 
-configure_tracing()
+introspection_client = configure_tracing()
 
 ## Tools factory - will be initialized based on configuration
 def get_search_tool(config: RunnableConfig):
@@ -124,18 +124,19 @@ async def supervisor(state: ReportState, config: RunnableConfig):
     supervisor_tool_list, _ = get_supervisor_tools(config)
     
     # Invoke
-    return {
-        "messages": [
-            await llm.bind_tools(supervisor_tool_list, parallel_tool_calls=False).ainvoke(
-                [
-                    {"role": "system",
-                     "content": SUPERVISOR_INSTRUCTIONS,
-                    }
-                ]
-                + messages
-            )
-        ]
-    }
+    with introspection_client.set_agent("supervisor"):
+        return {
+            "messages": [
+                await llm.bind_tools(supervisor_tool_list, parallel_tool_calls=False).ainvoke(
+                    [
+                        {"role": "system",
+                         "content": SUPERVISOR_INSTRUCTIONS,
+                        }
+                    ]
+                    + messages
+                )
+            ]
+        }
 
 async def supervisor_tools(state: ReportState, config: RunnableConfig)  -> Command[Literal["supervisor", "research_team", "__end__"]]:
     """Performs the tool call and sends to the research agent"""
@@ -231,19 +232,21 @@ async def research_agent(state: SectionState, config: RunnableConfig):
     # Get tools based on configuration
     research_tool_list, _ = get_research_tools(config)
     
-    return {
-        "messages": [
-            # Enforce tool calling to either perform more search or call the Section tool to write the section
-            await llm.bind_tools(research_tool_list).ainvoke(
-                [
-                    {"role": "system",
-                     "content": RESEARCH_INSTRUCTIONS.format(section_description=state["section"])
-                    }
-                ]
-                + state["messages"]
-            )
-        ]
-    }
+    agent_id = state.get("section")
+    with introspection_client.set_agent("researcher", agent_id=agent_id):
+        return {
+            "messages": [
+                # Enforce tool calling to either perform more search or call the Section tool to write the section
+                await llm.bind_tools(research_tool_list).ainvoke(
+                    [
+                        {"role": "system",
+                         "content": RESEARCH_INSTRUCTIONS.format(section_description=state["section"])
+                        }
+                    ]
+                    + state["messages"]
+                )
+            ]
+        }
 
 async def research_agent_tools(state: SectionState, config: RunnableConfig):
     """Performs the tool call and route to supervisor or continue the research loop"""
