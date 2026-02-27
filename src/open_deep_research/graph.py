@@ -30,12 +30,15 @@ from open_deep_research.prompts import (
 )
 
 from open_deep_research.configuration import Configuration
+from open_deep_research.instrumentation import configure_tracing
 from open_deep_research.utils import (
     format_sections, 
     get_config_value, 
     get_search_params, 
-    select_and_execute_search
+    select_and_execute_search,
 )
+
+configure_tracing()
 
 ## Nodes -- 
 
