@@ -105,26 +105,26 @@ def get_research_tools(config: RunnableConfig):
 async def supervisor(state: ReportState, config: RunnableConfig):
     """LLM decides whether to call a tool or not"""
 
-    # Messages
-    messages = state["messages"]
-
-    # Get configuration
-    configurable = Configuration.from_runnable_config(config)
-    supervisor_model = get_config_value(configurable.supervisor_model)
-    
-    # Initialize the model
-    llm = init_chat_model(model=supervisor_model)
-    
-    # If sections have been completed, but we don't yet have the final report, then we need to initiate writing the introduction and conclusion
-    if state.get("completed_sections") and not state.get("final_report"):
-        research_complete_message = {"role": "user", "content": "Research is complete. Now write the introduction and conclusion for the report. Here are the completed main body sections: \n\n" + "\n\n".join([s.content for s in state["completed_sections"]])}
-        messages = messages + [research_complete_message]
-
-    # Get tools based on configuration
-    supervisor_tool_list, _ = get_supervisor_tools(config)
-    
-    # Invoke
     with introspection_client.set_agent("supervisor"):
+        # Messages
+        messages = state["messages"]
+
+        # Get configuration
+        configurable = Configuration.from_runnable_config(config)
+        supervisor_model = get_config_value(configurable.supervisor_model)
+        
+        # Initialize the model
+        llm = init_chat_model(model=supervisor_model)
+        
+        # If sections have been completed, but we don't yet have the final report, then we need to initiate writing the introduction and conclusion
+        if state.get("completed_sections") and not state.get("final_report"):
+            research_complete_message = {"role": "user", "content": "Research is complete. Now write the introduction and conclusion for the report. Here are the completed main body sections: \n\n" + "\n\n".join([s.content for s in state["completed_sections"]])}
+            messages = messages + [research_complete_message]
+
+        # Get tools based on configuration
+        supervisor_tool_list, _ = get_supervisor_tools(config)
+        
+        # Invoke
         return {
             "messages": [
                 await llm.bind_tools(supervisor_tool_list, parallel_tool_calls=False).ainvoke(
@@ -141,69 +141,70 @@ async def supervisor(state: ReportState, config: RunnableConfig):
 async def supervisor_tools(state: ReportState, config: RunnableConfig)  -> Command[Literal["supervisor", "research_team", "__end__"]]:
     """Performs the tool call and sends to the research agent"""
 
-    result = []
-    sections_list = []
-    intro_content = None
-    conclusion_content = None
+    with introspection_client.set_agent("supervisor"):
+        result = []
+        sections_list = []
+        intro_content = None
+        conclusion_content = None
 
-    # Get tools based on configuration
-    _, supervisor_tools_by_name = get_supervisor_tools(config)
-    
-    # First process all tool calls to ensure we respond to each one (required for OpenAI)
-    for tool_call in state["messages"][-1].tool_calls:
-        # Get the tool
-        tool = supervisor_tools_by_name[tool_call["name"]]
-        # Perform the tool call - use ainvoke for async tools
-        if hasattr(tool, 'ainvoke'):
-            observation = await tool.ainvoke(tool_call["args"])
+        # Get tools based on configuration
+        _, supervisor_tools_by_name = get_supervisor_tools(config)
+        
+        # First process all tool calls to ensure we respond to each one (required for OpenAI)
+        for tool_call in state["messages"][-1].tool_calls:
+            # Get the tool
+            tool = supervisor_tools_by_name[tool_call["name"]]
+            # Perform the tool call - use ainvoke for async tools
+            if hasattr(tool, 'ainvoke'):
+                observation = await tool.ainvoke(tool_call["args"])
+            else:
+                observation = tool.invoke(tool_call["args"])
+
+            # Append to messages 
+            result.append({"role": "tool", 
+                           "content": observation, 
+                           "name": tool_call["name"], 
+                           "tool_call_id": tool_call["id"]})
+            
+            # Store special tool results for processing after all tools have been called
+            if tool_call["name"] == "Sections":
+                sections_list = observation.sections
+            elif tool_call["name"] == "Introduction":
+                # Format introduction with proper H1 heading if not already formatted
+                if not observation.content.startswith("# "):
+                    intro_content = f"# {observation.name}\n\n{observation.content}"
+                else:
+                    intro_content = observation.content
+            elif tool_call["name"] == "Conclusion":
+                # Format conclusion with proper H2 heading if not already formatted
+                if not observation.content.startswith("## "):
+                    conclusion_content = f"## {observation.name}\n\n{observation.content}"
+                else:
+                    conclusion_content = observation.content
+        
+        # After processing all tool calls, decide what to do next
+        if sections_list:
+            # Send the sections to the research agents
+            return Command(goto=[Send("research_team", {"section": s}) for s in sections_list], update={"messages": result})
+        elif intro_content:
+            # Store introduction while waiting for conclusion
+            # Append to messages to guide the LLM to write conclusion next
+            result.append({"role": "user", "content": "Introduction written. Now write a conclusion section."})
+            return Command(goto="supervisor", update={"final_report": intro_content, "messages": result})
+        elif conclusion_content:
+            # Get all sections and combine in proper order: Introduction, Body Sections, Conclusion
+            intro = state.get("final_report", "")
+            body_sections = "\n\n".join([s.content for s in state["completed_sections"]])
+            
+            # Assemble final report in correct order
+            complete_report = f"{intro}\n\n{body_sections}\n\n{conclusion_content}"
+            
+            # Append to messages to indicate completion
+            result.append({"role": "user", "content": "Report is now complete with introduction, body sections, and conclusion."})
+            return Command(goto="supervisor", update={"final_report": complete_report, "messages": result})
         else:
-            observation = tool.invoke(tool_call["args"])
-
-        # Append to messages 
-        result.append({"role": "tool", 
-                       "content": observation, 
-                       "name": tool_call["name"], 
-                       "tool_call_id": tool_call["id"]})
-        
-        # Store special tool results for processing after all tools have been called
-        if tool_call["name"] == "Sections":
-            sections_list = observation.sections
-        elif tool_call["name"] == "Introduction":
-            # Format introduction with proper H1 heading if not already formatted
-            if not observation.content.startswith("# "):
-                intro_content = f"# {observation.name}\n\n{observation.content}"
-            else:
-                intro_content = observation.content
-        elif tool_call["name"] == "Conclusion":
-            # Format conclusion with proper H2 heading if not already formatted
-            if not observation.content.startswith("## "):
-                conclusion_content = f"## {observation.name}\n\n{observation.content}"
-            else:
-                conclusion_content = observation.content
-    
-    # After processing all tool calls, decide what to do next
-    if sections_list:
-        # Send the sections to the research agents
-        return Command(goto=[Send("research_team", {"section": s}) for s in sections_list], update={"messages": result})
-    elif intro_content:
-        # Store introduction while waiting for conclusion
-        # Append to messages to guide the LLM to write conclusion next
-        result.append({"role": "user", "content": "Introduction written. Now write a conclusion section."})
-        return Command(goto="supervisor", update={"final_report": intro_content, "messages": result})
-    elif conclusion_content:
-        # Get all sections and combine in proper order: Introduction, Body Sections, Conclusion
-        intro = state.get("final_report", "")
-        body_sections = "\n\n".join([s.content for s in state["completed_sections"]])
-        
-        # Assemble final report in correct order
-        complete_report = f"{intro}\n\n{body_sections}\n\n{conclusion_content}"
-        
-        # Append to messages to indicate completion
-        result.append({"role": "user", "content": "Report is now complete with introduction, body sections, and conclusion."})
-        return Command(goto="supervisor", update={"final_report": complete_report, "messages": result})
-    else:
-        # Default case (for search tools, etc.)
-        return Command(goto="supervisor", update={"messages": result})
+            # Default case (for search tools, etc.)
+            return Command(goto="supervisor", update={"messages": result})
 
 async def supervisor_should_continue(state: ReportState) -> Literal["supervisor_tools", END]:
     """Decide if we should continue the loop or stop based upon whether the LLM made a tool call"""
@@ -221,19 +222,19 @@ async def supervisor_should_continue(state: ReportState) -> Literal["supervisor_
 
 async def research_agent(state: SectionState, config: RunnableConfig):
     """LLM decides whether to call a tool or not"""
-    
-    # Get configuration
-    configurable = Configuration.from_runnable_config(config)
-    researcher_model = get_config_value(configurable.researcher_model)
-    
-    # Initialize the model
-    llm = init_chat_model(model=researcher_model)
 
-    # Get tools based on configuration
-    research_tool_list, _ = get_research_tools(config)
-    
-    agent_id = state.get("section")
+    agent_id = str(state.get("section")) if state.get("section") else None
     with introspection_client.set_agent("researcher", agent_id=agent_id):
+        # Get configuration
+        configurable = Configuration.from_runnable_config(config)
+        researcher_model = get_config_value(configurable.researcher_model)
+        
+        # Initialize the model
+        llm = init_chat_model(model=researcher_model)
+
+        # Get tools based on configuration
+        research_tool_list, _ = get_research_tools(config)
+        
         return {
             "messages": [
                 # Enforce tool calling to either perform more search or call the Section tool to write the section
@@ -251,38 +252,40 @@ async def research_agent(state: SectionState, config: RunnableConfig):
 async def research_agent_tools(state: SectionState, config: RunnableConfig):
     """Performs the tool call and route to supervisor or continue the research loop"""
 
-    result = []
-    completed_section = None
-    
-    # Get tools based on configuration
-    _, research_tools_by_name = get_research_tools(config)
-    
-    # Process all tool calls first (required for OpenAI)
-    for tool_call in state["messages"][-1].tool_calls:
-        # Get the tool
-        tool = research_tools_by_name[tool_call["name"]]
-        # Perform the tool call - use ainvoke for async tools
-        if hasattr(tool, 'ainvoke'):
-            observation = await tool.ainvoke(tool_call["args"])
-        else:
-            observation = tool.invoke(tool_call["args"])
-        # Append to messages 
-        result.append({"role": "tool", 
-                       "content": observation, 
-                       "name": tool_call["name"], 
-                       "tool_call_id": tool_call["id"]})
+    agent_id = str(state.get("section")) if state.get("section") else None
+    with introspection_client.set_agent("researcher", agent_id=agent_id):
+        result = []
+        completed_section = None
         
-        # Store the section observation if a Section tool was called
-        if tool_call["name"] == "Section":
-            completed_section = observation
-    
-    # After processing all tools, decide what to do next
-    if completed_section:
-        # Write the completed section to state and return to the supervisor
-        return {"messages": result, "completed_sections": [completed_section]}
-    else:
-        # Continue the research loop for search tools, etc.
-        return {"messages": result}
+        # Get tools based on configuration
+        _, research_tools_by_name = get_research_tools(config)
+        
+        # Process all tool calls first (required for OpenAI)
+        for tool_call in state["messages"][-1].tool_calls:
+            # Get the tool
+            tool = research_tools_by_name[tool_call["name"]]
+            # Perform the tool call - use ainvoke for async tools
+            if hasattr(tool, 'ainvoke'):
+                observation = await tool.ainvoke(tool_call["args"])
+            else:
+                observation = tool.invoke(tool_call["args"])
+            # Append to messages 
+            result.append({"role": "tool", 
+                           "content": observation, 
+                           "name": tool_call["name"], 
+                           "tool_call_id": tool_call["id"]})
+            
+            # Store the section observation if a Section tool was called
+            if tool_call["name"] == "Section":
+                completed_section = observation
+        
+        # After processing all tools, decide what to do next
+        if completed_section:
+            # Write the completed section to state and return to the supervisor
+            return {"messages": result, "completed_sections": [completed_section]}
+        else:
+            # Continue the research loop for search tools, etc.
+            return {"messages": result}
 
 async def research_agent_should_continue(state: SectionState) -> Literal["research_agent_tools", END]:
     """Decide if we should continue the loop or stop based upon whether the LLM made a tool call"""

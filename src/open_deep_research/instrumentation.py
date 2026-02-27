@@ -8,6 +8,7 @@ import os
 from introspection_sdk import IntrospectionClient, IntrospectionSpanProcessor
 from openinference.instrumentation.langchain import LangChainInstrumentor
 from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 
 _SERVICE_NAME = os.getenv("INTROSPECTION_SERVICE_NAME", "open_deep_research")
@@ -23,8 +24,14 @@ def configure_tracing() -> IntrospectionClient:
     if _configured:
         return _client
 
-    provider = TracerProvider()
-    _processor = IntrospectionSpanProcessor(service_name=_SERVICE_NAME)
+    if not os.getenv("INTROSPECTION_TOKEN"):
+        _configured = True
+        return _client
+
+    provider = TracerProvider(
+        resource=Resource.create({"service.name": _SERVICE_NAME})
+    )
+    _processor = IntrospectionSpanProcessor()
     provider.add_span_processor(_processor)
     trace.set_tracer_provider(provider)
 
