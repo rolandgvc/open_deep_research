@@ -36,9 +36,16 @@ from open_deep_research.utils import (
     get_search_params, 
     select_and_execute_search
 )
+from open_deep_research.instrumentation import (
+    configure_instrumentation,
+    traced_agent,
+)
+
+configure_instrumentation()
 
 ## Nodes -- 
 
+@traced_agent("report-planner")
 async def generate_report_plan(state: ReportState, config: RunnableConfig):
     """Generate the initial report plan with sections.
     
@@ -180,6 +187,7 @@ def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Litera
     else:
         raise TypeError(f"Interrupt value of type {type(feedback)} is not supported.")
     
+@traced_agent("query-writer")
 async def generate_queries(state: SectionState, config: RunnableConfig):
     """Generate search queries for researching a specific section.
     
@@ -253,6 +261,7 @@ async def search_web(state: SectionState, config: RunnableConfig):
 
     return {"source_str": source_str, "search_iterations": state["search_iterations"] + 1}
 
+@traced_agent("section-writer")
 async def write_section(state: SectionState, config: RunnableConfig) -> Command[Literal[END, "search_web"]]:
     """Write a section of the report and evaluate if more research is needed.
     
@@ -341,6 +350,7 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
         goto="search_web"
         )
     
+@traced_agent("final-section-writer")
 async def write_final_sections(state: SectionState, config: RunnableConfig):
     """Write sections that don't require research using completed sections as context.
     
