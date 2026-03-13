@@ -10,8 +10,14 @@ from langgraph.types import Command, Send
 from langgraph.graph import START, END, StateGraph
 
 from open_deep_research.configuration import Configuration
+from open_deep_research.instrumentation import (
+    configure_instrumentation,
+    traced_agent,
+)
 from open_deep_research.utils import get_config_value, tavily_search, duckduckgo_search
 from open_deep_research.prompts import SUPERVISOR_INSTRUCTIONS, RESEARCH_INSTRUCTIONS
+
+configure_instrumentation()
 
 ## Tools factory - will be initialized based on configuration
 def get_search_tool(config: RunnableConfig):
@@ -99,6 +105,7 @@ def get_research_tools(config: RunnableConfig):
     tool_list = [search_tool, Section]
     return tool_list, {tool.name: tool for tool in tool_list}
 
+@traced_agent("supervisor")
 async def supervisor(state: ReportState, config: RunnableConfig):
     """LLM decides whether to call a tool or not"""
 
@@ -215,6 +222,7 @@ async def supervisor_should_continue(state: ReportState) -> Literal["supervisor_
     else:
         return END
 
+@traced_agent("researcher")
 async def research_agent(state: SectionState, config: RunnableConfig):
     """LLM decides whether to call a tool or not"""
     
