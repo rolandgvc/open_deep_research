@@ -30,6 +30,7 @@ from open_deep_research.prompts import (
 )
 
 from open_deep_research.configuration import Configuration
+from open_deep_research.observability import configure_observability, traced_node
 from open_deep_research.utils import (
     format_sections, 
     get_config_value, 
@@ -37,8 +38,11 @@ from open_deep_research.utils import (
     select_and_execute_search
 )
 
+configure_observability()
+
 ## Nodes -- 
 
+@traced_node("generate_report_plan", agent_name="report-planner")
 async def generate_report_plan(state: ReportState, config: RunnableConfig):
     """Generate the initial report plan with sections.
     
@@ -180,6 +184,7 @@ def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Litera
     else:
         raise TypeError(f"Interrupt value of type {type(feedback)} is not supported.")
     
+@traced_node("generate_queries", agent_name="query-writer")
 async def generate_queries(state: SectionState, config: RunnableConfig):
     """Generate search queries for researching a specific section.
     
@@ -253,6 +258,7 @@ async def search_web(state: SectionState, config: RunnableConfig):
 
     return {"source_str": source_str, "search_iterations": state["search_iterations"] + 1}
 
+@traced_node("write_section", agent_name="section-writer")
 async def write_section(state: SectionState, config: RunnableConfig) -> Command[Literal[END, "search_web"]]:
     """Write a section of the report and evaluate if more research is needed.
     
@@ -341,6 +347,7 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
         goto="search_web"
         )
     
+@traced_node("write_final_sections", agent_name="final-section-writer")
 async def write_final_sections(state: SectionState, config: RunnableConfig):
     """Write sections that don't require research using completed sections as context.
     
