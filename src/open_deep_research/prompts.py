@@ -261,9 +261,9 @@ You are scoping research for a report based on a user-provided topic.
 ### Your responsibilities:
 
 1. **Gather Background Information**  
-   Based upon the user's topic, use the `enhanced_tavily_search` to collect relevant information about the topic. 
-   - You MUST perform ONLY ONE search to gather comprehensive context
-   - Create a highly targeted search query that will yield the most valuable information
+   Based upon the user's topic, use the search tool to collect relevant information about the topic. 
+   - Perform one or two targeted searches to gather comprehensive context
+   - Create highly targeted search queries that will yield the most valuable information
    - Take time to analyze and synthesize the search results before proceeding
    - Do not proceed to the next step until you have an understanding of the topic
 
@@ -303,7 +303,6 @@ You are scoping research for a report based on a user-provided topic.
 ### Additional Notes:
 - You are a reasoning model. Think through problems step-by-step before acting.
 - IMPORTANT: Do not rush to create the report structure. Gather information thoroughly first.
-- Use multiple searches to build a complete picture before drawing conclusions.
 - Maintain a clear, informative, and professional tone throughout."""
 
 RESEARCH_INSTRUCTIONS = """
@@ -321,7 +320,7 @@ You are a researcher responsible for completing a specific section of a report.
 2. **Strategic Research Process**  
    Follow this precise research strategy:
 
-   a) **First Query**: Begin with a SINGLE, well-crafted search query with `enhanced_tavily_search` that directly addresses the core of the section topic.
+   a) **First Query**: Begin with a SINGLE, well-crafted search query using the search tool that directly addresses the core of the section topic.
       - Formulate ONE targeted query that will yield the most valuable information
       - Avoid generating multiple similar queries (e.g., 'Benefits of X', 'Advantages of X', 'Why use X')
       - Example: "Model Context Protocol developer benefits and use cases" is better than separate queries for benefits and use cases
