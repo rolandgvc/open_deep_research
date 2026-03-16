@@ -181,6 +181,13 @@ async def supervisor_tools(state: ReportState, config: RunnableConfig)  -> Comma
     if sections_list:
         # Send the sections to the research agents
         return Command(goto=[Send("research_team", {"section": s}) for s in sections_list], update={"messages": result})
+    elif intro_content and conclusion_content:
+        # Both Introduction and Conclusion were called in the same turn —
+        # assemble the final report immediately instead of dropping the conclusion.
+        body_sections = "\n\n".join([s.content for s in state["completed_sections"]])
+        complete_report = f"{intro_content}\n\n{body_sections}\n\n{conclusion_content}"
+        result.append({"role": "user", "content": "Report is now complete with introduction, body sections, and conclusion."})
+        return Command(goto="supervisor", update={"final_report": complete_report, "messages": result})
     elif intro_content:
         # Store introduction while waiting for conclusion
         # Append to messages to guide the LLM to write conclusion next
