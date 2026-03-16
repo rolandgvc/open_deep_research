@@ -138,7 +138,7 @@ You can customize the research assistant workflow through several parameters:
 - `writer_provider`: Model provider for writing phase (default: "anthropic", but can be any provider from supported integrations with `init_chat_model` as listed [here](https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html))
 - `writer_model`: Model for writing the report (default: "claude-3-5-sonnet-latest")
 - `writer_model_kwargs`: Additional parameter for writer_model
-- `search_api`: API to use for web searches (default: "tavily", options include "perplexity", "exa", "arxiv", "pubmed", "linkup")
+- `search_api`: API to use for web searches (default: "tavily", options include "perplexity", "exa", "arxiv", "pubmed", "linkup", "duckduckgo", "googlesearch")
 
 ## 2. Multi-Agent Implementation (`src/open_deep_research/multi_agent.py`)
 
@@ -148,7 +148,7 @@ The multi-agent implementation uses a supervisor-researcher architecture:
 - **Researcher Agents**: Multiple independent agents work in parallel, each responsible for researching and writing a specific section
 - **Parallel Processing**: All sections are researched simultaneously, significantly reducing report generation time
 - **Specialized Tool Design**: Each agent has access to specific tools for its role (search for researchers, section planning for supervisors)
-- **Currently Limited to Tavily Search**: The multi-agent implementation currently only works with Tavily for search, though the framework is designed to support additional search tools in the future
+- **Limited Search Provider Support**: The multi-agent implementation currently supports Tavily and DuckDuckGo for search. Other providers (Perplexity, Exa, ArXiv, PubMed, Linkup, Google) are only available in the graph-based workflow.
 
 This implementation focuses on efficiency and parallelization, making it ideal for faster report generation with less direct user involvement.
 
