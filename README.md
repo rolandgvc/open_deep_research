@@ -182,7 +182,7 @@ thread = {"configurable": {"thread_id": str(uuid.uuid4()),
 
 (2) ***The workflow planner and writer models need to support structured outputs***: Check whether structured outputs are supported by the model you are using [here](https://python.langchain.com/docs/integrations/chat/).
 
-(3) ***The agent models need to support tool calling:*** Ensure tool calling is well supoorted; tests have been done with Claude 3.7, o3, o3-mini, and gpt4.1. See [here](https://smith.langchain.com/public/adc5d60c-97ee-4aa0-8b2c-c776fb0d7bd6/d).
+(3) ***The agent models need to support tool calling:*** Ensure tool calling is well supported; tests have been done with Claude 3.7, o3, o3-mini, and gpt4.1. See [here](https://smith.langchain.com/public/adc5d60c-97ee-4aa0-8b2c-c776fb0d7bd6/d).
 
 (4) With Groq, there are token per minute (TPM) limits if you are on the `on_demand` service tier:
 - The `on_demand` service tier has a limit of `6000 TPM`
@@ -195,7 +195,7 @@ thread = {"configurable": {"thread_id": str(uuid.uuid4()),
 groq.APIError: Failed to call a function. Please adjust your prompt. See 'failed_generation' for more details.
 ```
 
-(6) Follow [here[(https://github.com/langchain-ai/open_deep_research/issues/75#issuecomment-2811472408) to use with OpenRouter.
+(6) Follow [here](https://github.com/langchain-ai/open_deep_research/issues/75#issuecomment-2811472408) to use with OpenRouter.
 
 (7) For working with local models via Ollama, see [here](https://github.com/langchain-ai/open_deep_research/issues/65#issuecomment-2743586318).
 
