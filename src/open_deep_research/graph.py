@@ -423,7 +423,7 @@ def compile_final_report(state: ReportState):
 
     # Update sections with completed content while maintaining original order
     for section in sections:
-        section.content = completed_sections[section.name]
+        section.content = completed_sections.get(section.name, section.content)
 
     # Compile final report
     all_sections = "\n\n".join([s.content for s in sections])
