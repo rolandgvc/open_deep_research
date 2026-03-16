@@ -128,7 +128,7 @@ async def generate_report_plan(state: ReportState, config: RunnableConfig):
 
     return {"sections": sections}
 
-def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Literal["generate_report_plan","build_section_with_web_research"]]:
+def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Literal["generate_report_plan","build_section_with_web_research","gather_completed_sections"]]:
     """Get human feedback on the report plan and route to next steps.
     
     This node:
@@ -166,11 +166,15 @@ def human_feedback(state: ReportState, config: RunnableConfig) -> Command[Litera
     # If the user approves the report plan, kick off section writing
     if isinstance(feedback, bool) and feedback is True:
         # Treat this as approve and kick off section writing
-        return Command(goto=[
-            Send("build_section_with_web_research", {"topic": topic, "section": s, "search_iterations": 0}) 
-            for s in sections 
-            if s.research
-        ])
+        research_sections = [s for s in sections if s.research]
+        if research_sections:
+            return Command(goto=[
+                Send("build_section_with_web_research", {"topic": topic, "section": s, "search_iterations": 0}) 
+                for s in research_sections
+            ])
+        else:
+            # No research sections — skip straight to writing final sections
+            return Command(goto="gather_completed_sections")
     
     # If the user provides feedback, regenerate the report plan 
     elif isinstance(feedback, str):
