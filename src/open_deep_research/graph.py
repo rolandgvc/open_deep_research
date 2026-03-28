@@ -408,7 +408,8 @@ def compile_final_report(state: ReportState):
     This node:
     1. Gets all completed sections
     2. Orders them according to original plan
-    3. Combines them into the final report
+    3. Renumbers citations globally so [1] is unique across the whole document
+    4. Combines them into the final report
     
     Args:
         state: Current state with all completed sections
@@ -416,6 +417,7 @@ def compile_final_report(state: ReportState):
     Returns:
         Dict containing the complete report
     """
+    import re
 
     # Get sections
     sections = state["sections"]
@@ -425,8 +427,24 @@ def compile_final_report(state: ReportState):
     for section in sections:
         section.content = completed_sections[section.name]
 
+    # Renumber citations globally so each [n] label is unique across the merged document.
+    # Each section writer starts numbering from [1]; without renumbering, every section
+    # would have a conflicting [1] pointing to a different source.
+    offset = 0
+    renumbered_contents = []
+    for section in sections:
+        content = section.content
+        nums = sorted(set(int(m) for m in re.findall(r'\[(\d+)\]', content)))
+        if nums:
+            # Replace from highest to lowest to avoid partial-match collisions
+            # e.g. replacing [1] before [13] would corrupt [13] → [4]3 if done naively
+            for n in sorted(nums, reverse=True):
+                content = content.replace(f'[{n}]', f'[{n + offset}]')
+            offset += max(nums)
+        renumbered_contents.append(content)
+
     # Compile final report
-    all_sections = "\n\n".join([s.content for s in sections])
+    all_sections = "\n\n".join(renumbered_contents)
 
     return {"final_report": all_sections}
 
