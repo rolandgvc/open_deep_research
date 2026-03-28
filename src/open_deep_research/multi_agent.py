@@ -27,11 +27,15 @@ def get_search_tool(config: RunnableConfig):
         # Use the DuckDuckGo search tool
         return duckduckgo_search
     else:
-        # Raise NotImplementedError for search APIs other than Tavily
-        raise NotImplementedError(
-            f"The search API '{search_api}' is not yet supported in the multi-agent implementation. "
-            f"Currently, only Tavily is supported. Please use the graph-based implementation in "
-            f"src/open_deep_research/graph.py for other search APIs, or set search_api to 'tavily'."
+        # Raise ValueError for search APIs not yet supported in the multi-agent graph.
+        # The workflow graph (graph.py) supports all backends — use that for other providers.
+        supported = "tavily, duckduckgo"
+        raise ValueError(
+            f"The search API '{search_api}' is not supported in the multi-agent graph. "
+            f"Supported backends: {supported}. "
+            f"To use other backends (exa, arxiv, pubmed, perplexity, linkup, googlesearch), "
+            f"run the workflow graph instead (src/open_deep_research/graph.py) or set "
+            f"search_api to 'tavily' or 'duckduckgo'."
         )
 
 @tool
