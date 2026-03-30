@@ -30,7 +30,9 @@ dependencies = [
     "langchain_tavily",
     "pytest",
     "httpx>=0.24.0",
-    "markdownify>=0.11.6"
+    "markdownify>=0.11.6",
+    "introspection-sdk",
+    "openinference-instrumentation-langchain>=0.1.0"
 ]
 
 [project.optional-dependencies]
