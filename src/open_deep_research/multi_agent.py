@@ -10,6 +10,7 @@ from langgraph.types import Command, Send
 from langgraph.graph import START, END, StateGraph
 
 from open_deep_research.configuration import Configuration
+from open_deep_research.instrumentation import introspection_config
 from open_deep_research.utils import get_config_value, tavily_search, duckduckgo_search
 from open_deep_research.prompts import SUPERVISOR_INSTRUCTIONS, RESEARCH_INSTRUCTIONS
 
@@ -102,6 +103,8 @@ def get_research_tools(config: RunnableConfig):
 async def supervisor(state: ReportState, config: RunnableConfig):
     """LLM decides whether to call a tool or not"""
 
+    config = introspection_config(config, "supervisor")
+
     # Messages
     messages = state["messages"]
 
@@ -129,13 +132,16 @@ async def supervisor(state: ReportState, config: RunnableConfig):
                      "content": SUPERVISOR_INSTRUCTIONS,
                     }
                 ]
-                + messages
+                + messages,
+                config=config,
             )
         ]
     }
 
 async def supervisor_tools(state: ReportState, config: RunnableConfig)  -> Command[Literal["supervisor", "research_team", "__end__"]]:
     """Performs the tool call and sends to the research agent"""
+
+    config = introspection_config(config, "supervisor_tools")
 
     result = []
     sections_list = []
@@ -151,9 +157,9 @@ async def supervisor_tools(state: ReportState, config: RunnableConfig)  -> Comma
         tool = supervisor_tools_by_name[tool_call["name"]]
         # Perform the tool call - use ainvoke for async tools
         if hasattr(tool, 'ainvoke'):
-            observation = await tool.ainvoke(tool_call["args"])
+            observation = await tool.ainvoke(tool_call["args"], config=config)
         else:
-            observation = tool.invoke(tool_call["args"])
+            observation = tool.invoke(tool_call["args"], config=config)
 
         # Append to messages 
         result.append({"role": "tool", 
@@ -217,6 +223,7 @@ async def supervisor_should_continue(state: ReportState) -> Literal["supervisor_
 
 async def research_agent(state: SectionState, config: RunnableConfig):
     """LLM decides whether to call a tool or not"""
+    config = introspection_config(config, "researcher")
     
     # Get configuration
     configurable = Configuration.from_runnable_config(config)
@@ -237,13 +244,16 @@ async def research_agent(state: SectionState, config: RunnableConfig):
                      "content": RESEARCH_INSTRUCTIONS.format(section_description=state["section"])
                     }
                 ]
-                + state["messages"]
+                + state["messages"],
+                config=config,
             )
         ]
     }
 
 async def research_agent_tools(state: SectionState, config: RunnableConfig):
     """Performs the tool call and route to supervisor or continue the research loop"""
+
+    config = introspection_config(config, "researcher_tools")
 
     result = []
     completed_section = None
@@ -257,9 +267,9 @@ async def research_agent_tools(state: SectionState, config: RunnableConfig):
         tool = research_tools_by_name[tool_call["name"]]
         # Perform the tool call - use ainvoke for async tools
         if hasattr(tool, 'ainvoke'):
-            observation = await tool.ainvoke(tool_call["args"])
+            observation = await tool.ainvoke(tool_call["args"], config=config)
         else:
-            observation = tool.invoke(tool_call["args"])
+            observation = tool.invoke(tool_call["args"], config=config)
         # Append to messages 
         result.append({"role": "tool", 
                        "content": observation, 
