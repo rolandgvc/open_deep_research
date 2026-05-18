@@ -30,6 +30,7 @@ from open_deep_research.prompts import (
 )
 
 from open_deep_research.configuration import Configuration
+from open_deep_research.instrumentation import introspection_config
 from open_deep_research.utils import (
     format_sections, 
     get_config_value, 
@@ -55,6 +56,8 @@ async def generate_report_plan(state: ReportState, config: RunnableConfig):
     Returns:
         Dict containing the generated sections
     """
+
+    config = introspection_config(config, "report_planner")
 
     # Inputs
     topic = state["topic"]
@@ -84,7 +87,7 @@ async def generate_report_plan(state: ReportState, config: RunnableConfig):
 
     # Generate queries  
     results = await structured_llm.ainvoke([SystemMessage(content=system_instructions_query),
-                                     HumanMessage(content="Generate search queries that will help with planning the sections of the report.")])
+                                     HumanMessage(content="Generate search queries that will help with planning the sections of the report.")], config=config)
 
     # Web search
     query_list = [query.search_query for query in results.queries]
@@ -121,7 +124,7 @@ async def generate_report_plan(state: ReportState, config: RunnableConfig):
     # Generate the report sections
     structured_llm = planner_llm.with_structured_output(Sections)
     report_sections = await structured_llm.ainvoke([SystemMessage(content=system_instructions_sections),
-                                             HumanMessage(content=planner_message)])
+                                             HumanMessage(content=planner_message)], config=config)
 
     # Get sections
     sections = report_sections.sections
@@ -194,6 +197,8 @@ async def generate_queries(state: SectionState, config: RunnableConfig):
         Dict containing the generated search queries
     """
 
+    config = introspection_config(config, "section_query_writer")
+
     # Get state 
     topic = state["topic"]
     section = state["section"]
@@ -216,7 +221,7 @@ async def generate_queries(state: SectionState, config: RunnableConfig):
 
     # Generate queries  
     queries = await structured_llm.ainvoke([SystemMessage(content=system_instructions),
-                                     HumanMessage(content="Generate search queries on the provided topic.")])
+                                     HumanMessage(content="Generate search queries on the provided topic.")], config=config)
 
     return {"search_queries": queries.queries}
 
@@ -271,6 +276,8 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
         Command to either complete section or do more research
     """
 
+    config = introspection_config(config, "section_writer")
+
     # Get state 
     topic = state["topic"]
     section = state["section"]
@@ -293,7 +300,7 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
     writer_model = init_chat_model(model=writer_model_name, model_provider=writer_provider, model_kwargs=writer_model_kwargs) 
 
     section_content = await writer_model.ainvoke([SystemMessage(content=section_writer_instructions),
-                                           HumanMessage(content=section_writer_inputs_formatted)])
+                                           HumanMessage(content=section_writer_inputs_formatted)], config=config)
     
     # Write content to the section object  
     section.content = section_content.content
@@ -324,7 +331,7 @@ async def write_section(state: SectionState, config: RunnableConfig) -> Command[
                                            model_provider=planner_provider, model_kwargs=planner_model_kwargs).with_structured_output(Feedback)
     # Generate feedback
     feedback = await reflection_model.ainvoke([SystemMessage(content=section_grader_instructions_formatted),
-                                        HumanMessage(content=section_grader_message)])
+                                        HumanMessage(content=section_grader_message)], config=introspection_config(config, "section_reflection"))
 
     # If the section is passing or the max search depth is reached, publish the section to completed sections 
     if feedback.grade == "pass" or state["search_iterations"] >= configurable.max_search_depth:
@@ -355,6 +362,8 @@ async def write_final_sections(state: SectionState, config: RunnableConfig):
         Dict containing the newly written section
     """
 
+    config = introspection_config(config, "final_section_writer")
+
     # Get configuration
     configurable = Configuration.from_runnable_config(config)
 
@@ -373,7 +382,7 @@ async def write_final_sections(state: SectionState, config: RunnableConfig):
     writer_model = init_chat_model(model=writer_model_name, model_provider=writer_provider, model_kwargs=writer_model_kwargs) 
     
     section_content = await writer_model.ainvoke([SystemMessage(content=system_instructions),
-                                           HumanMessage(content="Generate a report section based on the provided sources.")])
+                                           HumanMessage(content="Generate a report section based on the provided sources.")], config=config)
     
     # Write content to section 
     section.content = section_content.content
