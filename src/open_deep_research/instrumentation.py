@@ -10,7 +10,9 @@ from langchain_core.runnables import RunnableConfig
 _handler = None
 
 
-def introspection_config(config: RunnableConfig, agent_name: str) -> RunnableConfig:
+def introspection_config(config: RunnableConfig | None, agent_name: str) -> RunnableConfig:
+    config = config or {}
+
     if not os.environ.get("INTROSPECTION_TOKEN"):
         return config
 
